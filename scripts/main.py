@@ -30,7 +30,7 @@ def print_banner():
 """
     print(banner)
     print(f"\n📅 Analysis Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📁 Data Source: ./Data/")
+    print(f"📁 Data Source: ../Data/")
     print("\n" + "="*80)
 
 def main():
