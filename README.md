@@ -2,7 +2,7 @@
 
 ## Wine & Spirits Retail Optimization System
 
-A comprehensive data science and analytics solution for optimizing inventory management, reducing inefficiencies, and extracting actionable insights from sales, purchase, and inventory data.
+A complete analytics and automation system for inventory optimization, sales forecasting, supplier performance tracking, and cost reduction — designed for a large-scale retail environment.
 
 ---
 
@@ -12,6 +12,7 @@ A comprehensive data science and analytics solution for optimizing inventory man
 - [Features](#features)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Data Format](#data-format)
 - [Methodology](#methodology)
 - [Output Files](#output-files)
 - [Key Findings](#key-findings)
@@ -23,401 +24,219 @@ A comprehensive data science and analytics solution for optimizing inventory man
 
 ## 🎯 Overview
 
-This project addresses the challenge of managing millions of transactions for a retail wine & spirits company operating across multiple locations. Traditional spreadsheet-based analysis is inadequate for this scale, requiring sophisticated data-driven approaches.
+This project streamlines end-to-end **retail inventory management** using advanced data analytics.  
+It replaces manual spreadsheet-based analysis with automated, scalable Python workflows for large datasets.
 
 ### Business Objectives
 
-- **Inventory Optimization**: Determine ideal inventory levels for different product categories
-- **Sales & Purchase Insights**: Identify trends, top-performing products, and supplier efficiency
-- **Process Improvement**: Optimize procurement and stock control to minimize financial loss
-- **Risk Mitigation**: Predict and prevent stockouts while reducing excess inventory
+- **Inventory Optimization:** Determine ideal stock levels and reorder quantities  
+- **Demand Forecasting:** Predict future sales to prevent overstocking or stockouts  
+- **Supplier Evaluation:** Analyze performance, consistency, and lead times  
+- **Operational Efficiency:** Automate reports and visual insights for decision-makers  
 
 ---
 
 ## ✨ Features
 
 ### 1. 📈 Demand Forecasting
-- **Time Series Analysis**: SARIMA model implementation for accurate demand prediction
-- **Seasonal Decomposition**: Identifies trends, seasonality, and residuals
-- **Confidence Intervals**: 95% prediction intervals for risk assessment
-- **6-Month Forecast**: Forward-looking demand predictions with accuracy metrics (MAPE, RMSE, MAE)
+- SARIMA-based **time series forecasting**
+- Trend & seasonality decomposition
+- Rolling 6-month prediction with 95% confidence intervals
+- Visual time series forecast charts and evaluation metrics
 
-### 2. 📦 ABC Analysis
-- **Pareto Classification**: Categorizes inventory into A (70% revenue), B (21%), and C (9%) classes
-- **Resource Allocation**: Focuses management effort on high-value items
-- **Visual Analytics**: Pareto charts and revenue distribution visualizations
-- **Strategic Recommendations**: Tailored inventory policies for each category
+### 2. 📦 ABC Classification
+- Product segmentation based on **cumulative revenue contribution**
+- A/B/C categories for strategic stock management
+- Pareto visualization for high-revenue SKUs
 
-### 3. 💰 Economic Order Quantity (EOQ) Analysis
-- **Cost Optimization**: Calculates optimal order quantities to minimize total costs
-- **Savings Identification**: Quantifies potential annual savings ($9,940+ in sample data)
-- **Order Frequency**: Determines optimal ordering frequency for each product
-- **What-If Analysis**: Compares current vs. optimized ordering strategies
+### 3. 💰 EOQ (Economic Order Quantity)
+- Optimal order calculation to **minimize total cost**
+- Comparison of **current vs optimized** purchasing strategy
+- Estimated savings per SKU
 
 ### 4. 🔔 Reorder Point Analysis
-- **Stockout Prevention**: Calculates precise reorder points with safety stock
-- **Risk Assessment**: Identifies critical items requiring immediate action
-- **Service Level Optimization**: 95% service level maintenance
-- **Lead Time Integration**: Accounts for supplier variability
+- Calculates reorder points + safety stock
+- Integrates supplier **lead time variability**
+- Prevents stockouts and lost revenue
 
-### 5. ⏱️ Lead Time Analysis
-- **Supplier Performance**: Evaluates delivery reliability and consistency
-- **On-Time Delivery Metrics**: Tracks supplier performance against targets
-- **Trend Analysis**: Identifies improvements or deteriorations over time
-- **Optimization Opportunities**: Highlights suppliers needing attention
+### 5. ⏱️ Lead Time & Supplier Performance
+- Measures average, median, and variability in lead time
+- Tracks on-time delivery percentage
+- Flags unreliable suppliers
 
-### 6. 🔄 Additional Insights
-- **Seasonal Patterns**: Month-over-month and day-of-week analysis
-- **Inventory Turnover**: Health assessment and slow-moving inventory identification
-- **Category Performance**: Comparative analysis across wine, spirits, and beer
-- **Location Analytics**: Store-level performance comparison
+### 6. 🧾 Automated Data Cleaning & Export
+- Unified data loader automatically:
+  - Standardizes column names  
+  - Cleans currencies, numerics, and dates  
+  - Exports all cleaned datasets for downstream analysis  
 
 ---
 
 ## 🚀 Installation
 
 ### Prerequisites
-
 - Python 3.8 or higher
-- pip package manager
+- `pip` package manager
 
-### Step 1: Clone the Repository
-
+### 1️⃣ Clone Repository
 ```bash
-git clone https://github.com/yourusername/slooze-inventory-analysis.git
-cd slooze-inventory-analysis
-```
-
-### Step 2: Create Virtual Environment (Recommended)
-
-```bash
-# Windows
+git clone https://github.com/Nabi0-0/data-science-analytics.git
+cd data-science-analytics
+2️⃣ Create Virtual Environment
+bash
+Copy code
 python -m venv venv
-venv\Scripts\activate
-
-# macOS/Linux
-python3 -m venv venv
-source venv/bin/activate
-```
-
-### Step 3: Install Dependencies
-
-```bash
+venv\Scripts\activate  # Windows
+# or
+source venv/bin/activate  # macOS/Linux
+3️⃣ Install Dependencies
+bash
+Copy code
 pip install -r requirements.txt
-```
+4️⃣ Add Data
+Place all .csv files inside the Data/ folder:
 
-### Requirements.txt Contents:
+Copy code
+Data/
+ ├── SalesFINAL12312016.csv
+ ├── PurchasesFINAL12312016.csv
+ ├── EndInvFINAL12312016.csv
+ ├── BegInvFINAL12312016.csv
+ ├── InvoicePurchases12312016.csv
+ └── 2017PurchasePricesDec.csv
+💻 Usage
+Run the Full Analysis
+bash
+Copy code
+python scripts/main.py
+Or Use Individual Modules
+python
+Copy code
+from scripts.data_loader import SloozeDataLoader
 
-```
-pandas>=1.5.0
-numpy>=1.23.0
-matplotlib>=3.6.0
-seaborn>=0.12.0
-scikit-learn>=1.2.0
-statsmodels>=0.14.0
-scipy>=1.10.0
-openpyxl>=3.1.0
-```
+loader = SloozeDataLoader()
+loader.load_all_data()
+summary = loader.get_data_summary()
+sales = loader.create_unified_sales_dataset()
+purchases = loader.create_unified_purchase_dataset()
+🧮 Data Format
+Sales Data (SalesFINAL12312016.csv)
+Column	Description
+date	Date of sale
+quantity	Units sold
+price	Selling price per unit
+total_revenue	Computed: quantity × price
+brand / store / vendor	Product and vendor metadata
 
----
+Purchases Data (PurchasesFINAL12312016.csv)
+Column	Description
+order_date	Purchase order date
+delivery_date	Goods receiving date
+quantity	Purchased units
+unit_cost	Cost per unit
+total_cost	Total purchase cost
+vendor_name	Supplier details
 
-## 💻 Usage
+Ending Inventory (EndInvFINAL12312016.csv)
+Column	Description
+date	End-of-year date
+stock_qty	Units in stock
+unit_price	Selling price
+brand / description	Product info
 
-### Basic Usage
+📁 Output Files
+📊 CSV Exports
+Located in output/csv/
 
-```bash
-python inventory_analysis.py
-```
+sales_cleaned.csv
 
-### With Custom Data Files
+purchases_cleaned.csv
 
-```python
-from inventory_analysis import InventoryAnalyzer
+inventory_ending_cleaned.csv
 
-# Initialize with your data files
-analyzer = InventoryAnalyzer(
-    sales_file='your_sales_data.csv',
-    inventory_file='your_inventory_data.csv',
-    purchase_file='your_purchase_data.csv'
-)
+abc_classification.csv
 
-# Run individual analyses
-forecast = analyzer.demand_forecasting(forecast_periods=180)
-abc_results = analyzer.abc_analysis()
-eoq_results = analyzer.eoq_analysis(ordering_cost=50, holding_cost_rate=0.20)
-reorder_results = analyzer.reorder_point_analysis(service_level=0.95)
-```
+eoq_results.csv
 
-### Expected Data Format
+reorder_points.csv
 
-#### Sales Data (sales_data.csv)
-```csv
-date,product_id,product_name,category,quantity,unit_price,total_revenue,location
-2023-01-01,P001,Red Wine,Wine,45,25.00,1125.00,Store_A
-```
+supplier_lead_times.csv
 
-#### Inventory Data (inventory_data.csv)
-```csv
-product_id,product_name,category,current_stock,unit_cost,supplier
-P001,Red Wine,Wine,245,15.00,Supplier_1
-```
+🖼️ PNG Visualizations
+Located in output/png/
 
-#### Purchase Data (purchase_data.csv)
-```csv
-order_date,delivery_date,product_id,product_name,quantity,unit_cost,supplier
-2023-01-05,2023-01-12,P001,Red Wine,500,15.00,Supplier_1
-```
+demand_forecast.png
 
----
+abc_analysis.png
 
-## 📊 Methodology
+eoq_analysis.png
 
-### 1. Demand Forecasting
+reorder_point_analysis.png
 
-**Model**: SARIMA (Seasonal AutoRegressive Integrated Moving Average)
-- **Order**: (1,1,1)
-- **Seasonal Order**: (1,1,1,7) - Weekly seasonality
-- **Validation**: 80-20 train-test split
-- **Metrics**: MAPE, RMSE, MAE
+lead_time_analysis.png
 
-**Approach**:
-1. Time series decomposition (trend, seasonality, residual)
-2. Stationarity testing and differencing
-3. Model parameter optimization
-4. Out-of-sample validation
-5. 180-day forward forecast with confidence intervals
+📑 Reports
+Located in output/reports/
 
-### 2. ABC Analysis
+executive_summary.txt (insights and recommendations)
 
-**Classification Method**: Cumulative Revenue Percentage
-- **Category A**: Top items contributing to 70% of revenue
-- **Category B**: Next items contributing to 21% of revenue  
-- **Category C**: Remaining items contributing to 9% of revenue
+🧠 Methodology
+Module	Technique	Output
+Forecasting	SARIMA (1,1,1)(1,1,1,7)	6-month demand prediction
+ABC Analysis	Pareto (70/21/9 rule)	Product classification
+EOQ	√(2DS/H)	Optimal order quantity
+Reorder Point	Safety Stock + Lead Time	Stock alert threshold
+Supplier Lead Time	Mean, SD, On-time %	Reliability score
 
-**Formula**: 
-```
-Cumulative % = (Σ Revenue up to item i) / (Total Revenue) × 100
-```
+🧾 Technologies Used
+Python 3.8+
 
-### 3. EOQ Analysis
+Pandas, NumPy
 
-**Formula**:
-```
-EOQ = √(2DS/H)
+Matplotlib, Seaborn
 
-Where:
-D = Annual demand
-S = Ordering cost per order
-H = Holding cost per unit per year
-```
+Statsmodels, Scikit-learn
 
-**Assumptions**:
-- Constant demand rate
-- Fixed ordering cost: $50 per order
-- Holding cost: 20% of unit cost per year
-- No stockouts allowed
+OpenPyXL, SciPy
 
-### 4. Reorder Point
-
-**Formula**:
-```
-ROP = (Average Daily Demand × Lead Time) + Safety Stock
-
-Safety Stock = Z × √(LT × σ²_demand + μ²_demand × σ²_LT)
-
-Where:
-Z = Z-score for desired service level (1.65 for 95%)
-LT = Average lead time
-σ_demand = Standard deviation of daily demand
-μ_demand = Average daily demand
-σ_LT = Standard deviation of lead time
-```
-
-### 5. Lead Time Analysis
-
-**Metrics Calculated**:
-- Mean and median lead time
-- Standard deviation (variability)
-- On-time delivery rate
-- Supplier-specific performance
-- Trend analysis over time
-
-### 6. Inventory Turnover
-
-**Formula**:
-```
-Inventory Turnover Ratio = COGS / Average Inventory Value
-
-Days Inventory Outstanding = 365 / Turnover Ratio
-```
-
-**Classification**:
-- **Excellent**: Turnover ≥ 8
-- **Good**: 6 ≤ Turnover < 8
-- **Average**: 4 ≤ Turnover < 6
-- **Poor**: Turnover < 4
-
----
-
-## 📁 Output Files
-
-The analysis generates the following files:
-
-### CSV Files (Data)
-- `demand_forecast.csv` - 180-day demand predictions with confidence intervals
-- `abc_classification.csv` - Product classifications with revenue analysis
-- `eoq_results.csv` - Optimal order quantities and savings calculations
-- `reorder_points.csv` - Reorder points, safety stock, and stockout risks
-- `supplier_lead_times.csv` - Supplier performance metrics
-- `inventory_turnover.csv` - Turnover ratios and inventory health
-
-### PNG Files (Visualizations)
-- `demand_decomposition.png` - Time series decomposition
-- `demand_forecast.png` - Forecast with confidence intervals
-- `abc_analysis.png` - Pareto chart and revenue distribution
-- `eoq_analysis.png` - Order quantity comparisons and savings
-- `reorder_point_analysis.png` - Stock levels and risk assessment
-- `lead_time_analysis.png` - Supplier performance and trends
-- `seasonal_analysis.png` - Seasonal patterns and trends
-- `inventory_turnover.png` - Turnover analysis and health distribution
-
-### Text Files (Reports)
-- `executive_summary.txt` - High-level findings and recommendations
-
----
-
-## 🎯 Key Findings (Sample Data)
-
-### Critical Insights
-
-1. **Demand Forecast**
-   - 94.2% forecast accuracy (MAPE)
-   - Expected 8.3% growth in Q2
-   - Strong seasonal peaks in December and summer months
-
-2. **ABC Analysis**
-   - 15% of products (Category A) generate 70% of revenue
-   - Focus 80% of management effort on these 150 SKUs
-   - 500 Category C products suitable for bulk ordering
-
-3. **EOQ Optimization**
-   - **$9,940** potential annual savings identified
-   - Average 22% reduction in order quantities
-   - Recommend shift to smaller, more frequent orders
-
-4. **Stockout Risks**
-   - **3 critical items** requiring immediate orders
-   - Craft Whiskey: 12 days until stockout (85% risk)
-   - Champagne: 18 days until stockout (62% risk)
-
-5. **Supplier Performance**
-   - Average lead time: 8.2 days (improved by 1.3 days)
-   - Local Brewers: Best performer (98% on-time, 3.2 days)
-   - International Wines: Needs attention (82% on-time, 14.3 days)
-
-6. **Inventory Health**
-   - Average turnover ratio: 6.4 (Good)
-   - 12% of inventory classified as slow-moving
-   - Recommend liquidation strategies for underperformers
-
-### Recommendations
-
-1. **Immediate Actions**
-   - Order Craft Whiskey (89 units vs 120 reorder point)
-   - Renegotiate with International Wines supplier
-   - Implement EOQ for top 5 products (saves $5,000/year)
-
-2. **Short-term (1-3 months)**
-   - Increase safety stock by 15% for summer season
-   - Establish weekly monitoring for Category A items
-   - Implement automated reorder point alerts
-
-3. **Long-term (6-12 months)**
-   - Transition to JIT for high-turnover items
-   - Develop supplier scorecard system
-   - Consider inventory reduction for Category C items
-   - Implement demand sensing technology
-
----
-
-## 🛠️ Technologies Used
-
-- **Python 3.8+**: Core programming language
-- **Pandas**: Data manipulation and analysis
-- **NumPy**: Numerical computations
-- **Matplotlib & Seaborn**: Data visualization
-- **Statsmodels**: Time series forecasting (SARIMA)
-- **Scikit-learn**: Machine learning metrics
-- **SciPy**: Statistical analysis and optimization
-
----
-
-## 📂 Project Structure
-
-```
-slooze-inventory-analysis/
+📂 Project Structure
+bash
+Copy code
+data-science-analytics/
 │
-├── inventory_analysis.py      # Main analysis script
-├── requirements.txt           # Python dependencies
-├── README.md                  # This file
-├── data/                      # Data directory (not included)
-│   ├── sales_data.csv
-│   ├── inventory_data.csv
-│   └── purchase_data.csv
-│
-├── output/                    # Generated outputs
-│   ├── csv/                   # Data files
-│   ├── png/                   # Visualizations
-│   └── reports/               # Text reports
-│
-└── notebooks/                 # Jupyter notebooks (optional)
-    └── exploratory_analysis.ipynb
-```
+├── Data/                     # Raw datasets (CSV)
+├── scripts/                  # Main analytical modules
+│   ├── main.py
+│   ├── data_loader.py
+│   ├── forecasting.py
+│   ├── abc_analysis.py
+│   ├── eoq_reorder.py
+│   ├── supplier_analysis.py
+│   └── utils.py
+├── output/
+│   ├── csv/
+│   ├── png/
+│   └── reports/
+├── requirements.txt
+├── README.md
+└── SloozeInventoryDashboard/
+👩‍💻 Author
+Vedanshi Goswami
 
----
+GitHub: @Nabi0-0
 
-## 🤝 Contributing
+LinkedIn: Vedanshi Goswami
 
-This is a take-home challenge submission. For questions or suggestions, please contact:
+Email: vedanshigoswami0@gmail.com
 
-**Email**: careers@slooze.xyz
+📝 Notes
+All cleaned datasets are automatically exported in /output/csv
 
----
+Visuals are saved in /output/png (300 DPI)
 
-## 📄 License
+Designed to handle large datasets efficiently
 
-© Slooze. All Rights Reserved.
+Modular architecture — easy to extend with ML or BI dashboards
 
-This material is confidential and intended only for the evaluation process. Please do not share or distribute outside the intended purpose.
-
----
-
-## 👨‍💻 Author
-
-**Your Name**
-- GitHub: [@yourusername](https://github.com/yourusername)
-- LinkedIn: [Your LinkedIn](https://linkedin.com/in/yourprofile)
-- Email: your.email@example.com
-
----
-
-## 🙏 Acknowledgments
-
-- Slooze team for providing this challenging and realistic problem
-- Open-source community for excellent Python libraries
-- Data science community for methodological guidance
-
----
-
-## 📝 Notes
-
-- Sample data is automatically generated if actual data files are not found
-- All visualizations are saved in high resolution (300 DPI)
-- Analysis is designed to handle millions of transactions efficiently
-- Code is modular and extensible for future enhancements
-
----
-
-**Last Updated**: November 2024
-
-**Version**: 1.0.0
+Last Updated: 11 Nov 2025
+Version: 1.1.0
