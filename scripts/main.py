@@ -22,7 +22,7 @@ def print_banner():
     banner = """
 ╔══════════════════════════════════════════════════════════════════════════════╗
 ║                                                                              ║
-║                    🍷 SLOOZE INVENTORY ANALYSIS SYSTEM 🍷                   ║
+║                    🍷 SLOOZE INVENTORY ANALYSIS SYSTEM 🍷                    ║
 ║                                                                              ║
 ║              Wine & Spirits Retail Optimization & Analytics                  ║
 ║                                                                              ║
