@@ -1,5 +1,5 @@
 Data/*.csv
 output/
 /output/
-/output/csv/
+/output/csv/*.csv
 
