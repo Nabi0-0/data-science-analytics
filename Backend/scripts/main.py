@@ -49,6 +49,11 @@ def main():
     # STEP 1: LOAD DATA
     # ====================
     print_section_header("STEP 1: DATA LOADING & PREPARATION")
+    import os
+    print("📂 Current working directory:", os.getcwd())
+    print("📁 Files in current directory:", os.listdir('.'))
+    print("📁 Files in Data:", os.listdir('Data') if os.path.exists('Data') else "Not found")
+
     
     loader = SloozeDataLoader(data_dir='Data')
     

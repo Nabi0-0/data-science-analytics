@@ -9,7 +9,7 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
-from scripts.utils import (
+from utils import (
     print_section_header, 
     clean_currency_column,
     clean_numeric_column,
