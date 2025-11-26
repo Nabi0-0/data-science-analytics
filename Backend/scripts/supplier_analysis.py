@@ -1,285 +1,275 @@
 """
-supplier_analysis.py
-Supplier performance and lead time analysis
+Supplier Analysis Module
+Analyzes supplier performance and reliability
 """
 
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-from utils import (
-    print_section_header,
-    save_plot,
-    save_dataframe,
-    format_currency,
-    log_analysis_step
-)
 
 class SupplierAnalyzer:
-    """
-    Analyze supplier performance metrics
-    """
+    """Analyzes supplier performance metrics"""
     
-    def __init__(self, purchases_df, inventory_df=None):
-        """Initialize with purchase data"""
-        self.purchases_df = purchases_df
-        self.inventory_df = inventory_df
-        self.supplier_metrics = None
+    def __init__(self, purchases_df, invoice_df):
+        self.purchases_df = purchases_df.copy()
+        self.invoice_df = invoice_df.copy()
+        self._prepare_data()
     
-    def analyze_lead_times(self):
-        """Analyze supplier lead times"""
-        print_section_header("⏱️ LEAD TIME ANALYSIS")
-        
-        # Find date columns
-        date_cols = [col for col in self.purchases_df.columns if 'date' in col.lower()]
-        
-        if len(date_cols) < 2:
-            print("⚠️ Insufficient date columns to calculate lead time")
-            print(f"   Found columns: {date_cols}")
-            # Simulate lead time for demonstration
-            self.purchases_df['lead_time'] = np.random.randint(3, 15, len(self.purchases_df))
-        else:
-            # Calculate lead time
-            order_col = [col for col in date_cols if 'order' in col.lower() or 'purch' in col.lower()][0]
-            delivery_col = [col for col in date_cols if 'deliv' in col.lower() or 'receiv' in col.lower()]
-            
-            if not delivery_col:
-                delivery_col = date_cols[1]
-            else:
-                delivery_col = delivery_col[0]
-            
-            self.purchases_df[order_col] = pd.to_datetime(self.purchases_df[order_col])
-            self.purchases_df[delivery_col] = pd.to_datetime(self.purchases_df[delivery_col])
-            
-            self.purchases_df['lead_time'] = (
-                self.purchases_df[delivery_col] - self.purchases_df[order_col]
-            ).dt.days
-        
-        # Overall statistics
-        overall_stats = {
-            'Mean': self.purchases_df['lead_time'].mean(),
-            'Median': self.purchases_df['lead_time'].median(),
-            'Std Dev': self.purchases_df['lead_time'].std(),
-            'Min': self.purchases_df['lead_time'].min(),
-            'Max': self.purchases_df['lead_time'].max()
-        }
-        
-        print(f"\n📊 Overall Lead Time Statistics:")
-        for key, value in overall_stats.items():
-            print(f"   {key}: {value:.2f} days")
-        
-        # By supplier/vendor
-        vendor_col = [col for col in self.purchases_df.columns if 'vendor' in col.lower() or 'supplier' in col.lower()]
-        
-        if vendor_col:
-            vendor_col = vendor_col[0]
-            supplier_stats = self.purchases_df.groupby(vendor_col).agg({
-                'lead_time': ['mean', 'std', 'min', 'max', 'count']
-            }).reset_index()
-            supplier_stats.columns = ['Supplier', 'Mean_LT', 'Std_LT', 'Min_LT', 'Max_LT', 'Orders']
-            supplier_stats = supplier_stats.sort_values('Mean_LT')
-            
-            print(f"\n📦 Lead Time by Supplier:")
-            print(supplier_stats.to_string(index=False))
-            
-            # Save
-            save_dataframe(supplier_stats, 'supplier_lead_times.csv')
-        else:
-            print("\n⚠️ No supplier/vendor column found")
-            supplier_stats = None
-        
-        return overall_stats, supplier_stats
+    def _prepare_data(self):
+        """Prepare data for analysis"""
+        # Parse dates
+        date_columns = ['InvoiceDate', 'PODate', 'PayDate']
+        for col in date_columns:
+            if col in self.invoice_df.columns:
+                self.invoice_df[col] = pd.to_datetime(self.invoice_df[col], errors='coerce')
     
-    def analyze_supplier_performance(self):
-        """Comprehensive supplier performance analysis"""
-        print_section_header("📊 SUPPLIER PERFORMANCE ANALYSIS")
+    def calculate_lead_times(self):
+        """Calculate average lead times by supplier"""
+        # Calculate lead time (PO to Invoice)
+        self.invoice_df['LeadTime'] = (self.invoice_df['InvoiceDate'] - self.invoice_df['PODate']).dt.days
         
-        vendor_col = [col for col in self.purchases_df.columns if 'vendor' in col.lower() or 'supplier' in col.lower()]
+        # Remove negative and extreme values
+        self.invoice_df['LeadTime'] = self.invoice_df['LeadTime'].clip(0, 365)
         
-        if not vendor_col:
-            print("⚠️ No supplier/vendor column found")
-            return None
+        # Aggregate by supplier
+        lead_times = self.invoice_df.groupby('VendorName')['LeadTime'].agg([
+            ('AvgLeadTime', 'mean'),
+            ('StdLeadTime', 'std'),
+            ('MinLeadTime', 'min'),
+            ('MaxLeadTime', 'max'),
+            ('MedianLeadTime', 'median')
+        ]).reset_index()
         
-        vendor_col = vendor_col[0]
+        lead_times = lead_times.fillna(0)
         
-        # Calculate metrics by supplier
-        supplier_metrics = self.purchases_df.groupby(vendor_col).agg({
-            'lead_time': ['mean', 'std'],
-            vendor_col: 'count'
+        return lead_times
+    
+    def calculate_on_time_delivery(self, tolerance_days=2):
+        """Calculate on-time delivery percentage"""
+        # Assume expected delivery is PO date + average lead time
+        avg_lead_time = self.invoice_df['LeadTime'].mean()
+        
+        self.invoice_df['ExpectedDate'] = self.invoice_df['PODate'] + pd.Timedelta(days=avg_lead_time)
+        self.invoice_df['OnTime'] = (self.invoice_df['InvoiceDate'] - self.invoice_df['ExpectedDate']).dt.days <= tolerance_days
+        
+        # Calculate by supplier
+        on_time = self.invoice_df.groupby('VendorName')['OnTime'].agg([
+            ('TotalOrders', 'count'),
+            ('OnTimeOrders', 'sum')
+        ]).reset_index()
+        
+        on_time['OnTimePercentage'] = (on_time['OnTimeOrders'] / on_time['TotalOrders']) * 100
+        
+        return on_time
+    
+    def calculate_cost_metrics(self):
+        """Calculate cost-related metrics by supplier"""
+        # Aggregate spending by supplier
+        spending = self.invoice_df.groupby('VendorName').agg({
+            'Dollars': 'sum',
+            'Freight': 'sum',
+            'Quantity': 'sum'
         }).reset_index()
-        supplier_metrics.columns = ['Supplier', 'Avg_Lead_Time', 'Lead_Time_Variability', 'Total_Orders']
         
-        # Calculate total spend if we have cost/price info
-        cost_cols = [col for col in self.purchases_df.columns if 'cost' in col.lower() or 'price' in col.lower() or 'amount' in col.lower()]
-        if cost_cols:
-            spend = self.purchases_df.groupby(vendor_col)[cost_cols[0]].sum().reset_index()
-            spend.columns = ['Supplier', 'Total_Spend']
-            supplier_metrics = supplier_metrics.merge(spend, on='Supplier', how='left')
+        spending.columns = ['VendorName', 'TotalSpend', 'TotalFreight', 'TotalQuantity']
         
-        # Calculate on-time delivery rate
-        # Assume target lead time is mean + 1 std dev
-        target_lt = self.purchases_df['lead_time'].mean() + self.purchases_df['lead_time'].std()
-        self.purchases_df['on_time'] = self.purchases_df['lead_time'] <= target_lt
+        # Calculate unit cost
+        spending['AvgUnitCost'] = spending['TotalSpend'] / spending['TotalQuantity'].replace(0, np.nan)
+        spending['FreightPercentage'] = (spending['TotalFreight'] / spending['TotalSpend']) * 100
         
-        on_time_rate = self.purchases_df.groupby(vendor_col)['on_time'].apply(
-            lambda x: (x.sum() / len(x)) * 100
-        ).reset_index()
-        on_time_rate.columns = ['Supplier', 'On_Time_Rate']
+        spending = spending.fillna(0)
         
-        supplier_metrics = supplier_metrics.merge(on_time_rate, on='Supplier', how='left')
+        return spending
+    
+    def calculate_reliability_score(self):
+        """Calculate overall supplier reliability score (0-100)"""
+        # Get metrics
+        lead_times = self.calculate_lead_times()
+        on_time = self.calculate_on_time_delivery()
+        costs = self.calculate_cost_metrics()
         
-        # Calculate supplier score (weighted composite)
-        # Lower lead time = better, lower variability = better, higher on-time = better
-        supplier_metrics['Lead_Time_Score'] = (
-            100 - ((supplier_metrics['Avg_Lead_Time'] - supplier_metrics['Avg_Lead_Time'].min()) / 
-                   (supplier_metrics['Avg_Lead_Time'].max() - supplier_metrics['Avg_Lead_Time'].min()) * 50)
+        # Merge all metrics
+        supplier_metrics = pd.merge(lead_times, on_time, on='VendorName', how='outer')
+        supplier_metrics = pd.merge(supplier_metrics, costs, on='VendorName', how='outer')
+        
+        supplier_metrics = supplier_metrics.fillna(0)
+        
+        # Calculate scores (0-100)
+        # 1. Lead Time Score (lower is better)
+        if supplier_metrics['AvgLeadTime'].max() > 0:
+            supplier_metrics['LeadTimeScore'] = 100 * (1 - (supplier_metrics['AvgLeadTime'] / supplier_metrics['AvgLeadTime'].max()))
+        else:
+            supplier_metrics['LeadTimeScore'] = 100
+        
+        # 2. On-Time Delivery Score
+        supplier_metrics['DeliveryScore'] = supplier_metrics['OnTimePercentage']
+        
+        # 3. Consistency Score (lower std is better)
+        if supplier_metrics['StdLeadTime'].max() > 0:
+            supplier_metrics['ConsistencyScore'] = 100 * (1 - (supplier_metrics['StdLeadTime'] / supplier_metrics['StdLeadTime'].max()))
+        else:
+            supplier_metrics['ConsistencyScore'] = 100
+        
+        # Overall Reliability Score (weighted average)
+        supplier_metrics['ReliabilityScore'] = (
+            supplier_metrics['LeadTimeScore'] * 0.3 +
+            supplier_metrics['DeliveryScore'] * 0.4 +
+            supplier_metrics['ConsistencyScore'] * 0.3
         )
-        supplier_metrics['Variability_Score'] = (
-            100 - ((supplier_metrics['Lead_Time_Variability'] - supplier_metrics['Lead_Time_Variability'].min()) / 
-                   (supplier_metrics['Lead_Time_Variability'].max() - supplier_metrics['Lead_Time_Variability'].min()) * 30)
+        
+        # Assign rating
+        supplier_metrics['Rating'] = supplier_metrics['ReliabilityScore'].apply(
+            lambda x: 'Excellent' if x >= 90 else
+                     'Good' if x >= 75 else
+                     'Fair' if x >= 60 else
+                     'Poor'
         )
-        supplier_metrics['Composite_Score'] = (
-            supplier_metrics['Lead_Time_Score'] * 0.4 +
-            supplier_metrics['Variability_Score'] * 0.2 +
-            supplier_metrics['On_Time_Rate'] * 0.4
-        ).round(1)
-        
-        # Sort by composite score
-        supplier_metrics = supplier_metrics.sort_values('Composite_Score', ascending=False)
-        
-        print(f"\n📊 Supplier Performance Ranking:")
-        print(supplier_metrics[['Supplier', 'Avg_Lead_Time', 'On_Time_Rate', 'Composite_Score']].to_string(index=False))
-        
-        # Store results
-        self.supplier_metrics = supplier_metrics
-        
-        # Visualize
-        self._plot_supplier_analysis(supplier_metrics)
-        
-        # Save
-        save_dataframe(supplier_metrics, 'supplier_performance.csv')
-        
-        print(f"\n✅ Supplier performance analysis complete")
         
         return supplier_metrics
     
-    def identify_supplier_opportunities(self):
-        """Identify opportunities for supplier optimization"""
-        print_section_header("💡 SUPPLIER OPTIMIZATION OPPORTUNITIES")
+    def analyze_suppliers(self):
+        """Generate comprehensive supplier analysis"""
+        supplier_metrics = self.calculate_reliability_score()
         
-        if self.supplier_metrics is None:
-            print("⚠️ Run analyze_supplier_performance() first")
-            return
+        # Sort by reliability score
+        supplier_metrics = supplier_metrics.sort_values('ReliabilityScore', ascending=False)
         
-        # Identify underperforming suppliers
-        avg_score = self.supplier_metrics['Composite_Score'].mean()
-        underperforming = self.supplier_metrics[
-            self.supplier_metrics['Composite_Score'] < avg_score
-        ]
+        # Top performers
+        top_suppliers = supplier_metrics.head(10)
         
-        if len(underperforming) > 0:
-            print(f"\n⚠️  Underperforming Suppliers (below average score of {avg_score:.1f}):")
-            print(f"   Count: {len(underperforming)}")
-            print(f"\n   Suppliers needing attention:")
-            for _, row in underperforming.iterrows():
-                print(f"      • {row['Supplier']}")
-                print(f"        - Composite Score: {row['Composite_Score']:.1f}/100")
-                print(f"        - Avg Lead Time: {row['Avg_Lead_Time']:.1f} days")
-                print(f"        - On-Time Rate: {row['On_Time_Rate']:.1f}%")
+        # Poor performers
+        poor_suppliers = supplier_metrics[supplier_metrics['Rating'] == 'Poor']
         
-        # Identify best performers
-        top_performers = self.supplier_metrics.nlargest(3, 'Composite_Score')
-        print(f"\n🏆 Top 3 Performing Suppliers:")
-        for _, row in top_performers.iterrows():
-            print(f"   • {row['Supplier']}")
-            print(f"     - Score: {row['Composite_Score']:.1f}/100")
-            print(f"     - Lead Time: {row['Avg_Lead_Time']:.1f} days")
-            print(f"     - On-Time: {row['On_Time_Rate']:.1f}%")
+        # Calculate summary statistics
+        total_suppliers = len(supplier_metrics)
+        avg_reliability = supplier_metrics['ReliabilityScore'].mean()
+        total_spend = supplier_metrics['TotalSpend'].sum()
         
-        # Recommendations
-        print(f"\n📋 Recommendations:")
-        print(f"   1. Review contracts with {len(underperforming)} underperforming suppliers")
-        print(f"   2. Consider consolidating orders with top performers")
-        print(f"   3. Negotiate lead time improvements with high-variability suppliers")
-        print(f"   4. Implement supplier scorecard system for continuous monitoring")
+        # Spending concentration (top 5 suppliers)
+        top_5_spend = supplier_metrics.head(5)['TotalSpend'].sum()
+        spend_concentration = (top_5_spend / total_spend) * 100 if total_spend > 0 else 0
+        
+        return {
+            'summary': {
+                'total_suppliers': int(total_suppliers),
+                'avg_reliability_score': float(avg_reliability),
+                'total_spend': float(total_spend),
+                'spend_concentration_top5': float(spend_concentration),
+                'excellent_suppliers': int(len(supplier_metrics[supplier_metrics['Rating'] == 'Excellent'])),
+                'poor_suppliers': int(len(poor_suppliers))
+            },
+            'top_suppliers': top_suppliers.to_dict('records'),
+            'poor_suppliers': poor_suppliers.to_dict('records'),
+            'all_suppliers': supplier_metrics.to_dict('records'),
+            'recommendations': self.generate_recommendations(supplier_metrics)
+        }
     
-    def _plot_supplier_analysis(self, supplier_metrics):
-        """Plot supplier analysis visualizations"""
+    def generate_recommendations(self, supplier_metrics):
+        """Generate actionable recommendations"""
+        recommendations = []
         
-        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        # Check for poor performers
+        poor = supplier_metrics[supplier_metrics['Rating'] == 'Poor']
+        if len(poor) > 0:
+            recommendations.append({
+                'type': 'WARNING',
+                'category': 'Poor Performance',
+                'message': f'{len(poor)} supplier(s) rated as Poor',
+                'action': 'Review contracts and consider alternative suppliers',
+                'suppliers': poor['VendorName'].tolist()[:5]
+            })
         
-        # Supplier performance scores
-        top_n = min(10, len(supplier_metrics))
-        top_suppliers = supplier_metrics.head(top_n)
+        # Check for high lead times
+        high_lead_time = supplier_metrics[supplier_metrics['AvgLeadTime'] > 14]
+        if len(high_lead_time) > 0:
+            recommendations.append({
+                'type': 'INFO',
+                'category': 'Long Lead Times',
+                'message': f'{len(high_lead_time)} supplier(s) with lead time > 14 days',
+                'action': 'Negotiate faster delivery terms or increase safety stock',
+                'suppliers': high_lead_time['VendorName'].tolist()[:5]
+            })
         
-        axes[0, 0].barh(range(len(top_suppliers)), top_suppliers['Composite_Score'], 
-                       color='#3b82f6', alpha=0.7)
-        axes[0, 0].set_yticks(range(len(top_suppliers)))
-        axes[0, 0].set_yticklabels(top_suppliers['Supplier'])
-        axes[0, 0].set_xlabel('Composite Performance Score')
-        axes[0, 0].set_title(f'Top {top_n} Suppliers by Performance Score')
-        axes[0, 0].invert_yaxis()
-        axes[0, 0].axvline(x=80, color='red', linestyle='--', label='Target: 80')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3, axis='x')
+        # Check for low on-time delivery
+        low_on_time = supplier_metrics[supplier_metrics['OnTimePercentage'] < 80]
+        if len(low_on_time) > 0:
+            recommendations.append({
+                'type': 'WARNING',
+                'category': 'Delivery Issues',
+                'message': f'{len(low_on_time)} supplier(s) with <80% on-time delivery',
+                'action': 'Implement delivery performance penalties in contracts',
+                'suppliers': low_on_time['VendorName'].tolist()[:5]
+            })
         
-        # Lead time comparison
-        axes[0, 1].bar(range(len(top_suppliers)), top_suppliers['Avg_Lead_Time'], 
-                      color='#10b981', alpha=0.7)
-        axes[0, 1].set_xticks(range(len(top_suppliers)))
-        axes[0, 1].set_xticklabels(top_suppliers['Supplier'], rotation=45, ha='right')
-        axes[0, 1].set_ylabel('Average Lead Time (days)')
-        axes[0, 1].set_title(f'Average Lead Time by Supplier (Top {top_n})')
-        axes[0, 1].grid(True, alpha=0.3, axis='y')
+        # Identify excellent suppliers for partnership
+        excellent = supplier_metrics[supplier_metrics['Rating'] == 'Excellent'].head(5)
+        if len(excellent) > 0:
+            recommendations.append({
+                'type': 'SUCCESS',
+                'category': 'Strategic Partnerships',
+                'message': f'{len(excellent)} excellent supplier(s) identified',
+                'action': 'Consider volume commitments for better pricing',
+                'suppliers': excellent['VendorName'].tolist()
+            })
         
-        # On-time delivery rate
-        axes[1, 0].bar(range(len(top_suppliers)), top_suppliers['On_Time_Rate'], 
-                      color='#f59e0b', alpha=0.7)
-        axes[1, 0].set_xticks(range(len(top_suppliers)))
-        axes[1, 0].set_xticklabels(top_suppliers['Supplier'], rotation=45, ha='right')
-        axes[1, 0].set_ylabel('On-Time Delivery Rate (%)')
-        axes[1, 0].set_title(f'On-Time Delivery Performance (Top {top_n})')
-        axes[1, 0].axhline(y=95, color='red', linestyle='--', label='Target: 95%')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3, axis='y')
+        # Check spending concentration
+        total_spend = supplier_metrics['TotalSpend'].sum()
+        if total_spend > 0:
+            top_supplier_spend = supplier_metrics.iloc[0]['TotalSpend']
+            concentration = (top_supplier_spend / total_spend) * 100
+            
+            if concentration > 40:
+                recommendations.append({
+                    'type': 'WARNING',
+                    'category': 'Supplier Concentration Risk',
+                    'message': f'Top supplier represents {concentration:.1f}% of spending',
+                    'action': 'Diversify supplier base to reduce risk',
+                    'suppliers': [supplier_metrics.iloc[0]['VendorName']]
+                })
         
-        # Scatter: Lead time vs On-time rate
-        axes[1, 1].scatter(supplier_metrics['Avg_Lead_Time'], 
-                          supplier_metrics['On_Time_Rate'],
-                          s=supplier_metrics['Total_Orders']*2,
-                          alpha=0.6, color='#8b5cf6')
-        axes[1, 1].set_xlabel('Average Lead Time (days)')
-        axes[1, 1].set_ylabel('On-Time Delivery Rate (%)')
-        axes[1, 1].set_title('Lead Time vs On-Time Performance\n(bubble size = order volume)')
-        axes[1, 1].grid(True, alpha=0.3)
+        return recommendations
+    
+    def get_supplier_scorecard(self, vendor_name):
+        """Get detailed scorecard for a specific supplier"""
+        supplier_metrics = self.calculate_reliability_score()
+        supplier_data = supplier_metrics[supplier_metrics['VendorName'] == vendor_name]
         
-        # Add quadrant lines
-        axes[1, 1].axvline(x=supplier_metrics['Avg_Lead_Time'].median(), 
-                          color='gray', linestyle='--', alpha=0.5)
-        axes[1, 1].axhline(y=supplier_metrics['On_Time_Rate'].median(), 
-                          color='gray', linestyle='--', alpha=0.5)
+        if len(supplier_data) == 0:
+            return None
         
-        save_plot('supplier_analysis.png')
+        supplier = supplier_data.iloc[0]
+        
+        return {
+            'vendor_name': vendor_name,
+            'overall_rating': supplier['Rating'],
+            'reliability_score': float(supplier['ReliabilityScore']),
+            'metrics': {
+                'lead_time': {
+                    'average': float(supplier['AvgLeadTime']),
+                    'std_dev': float(supplier['StdLeadTime']),
+                    'min': float(supplier['MinLeadTime']),
+                    'max': float(supplier['MaxLeadTime']),
+                    'score': float(supplier['LeadTimeScore'])
+                },
+                'delivery': {
+                    'on_time_percentage': float(supplier['OnTimePercentage']),
+                    'total_orders': int(supplier['TotalOrders']),
+                    'on_time_orders': int(supplier['OnTimeOrders']),
+                    'score': float(supplier['DeliveryScore'])
+                },
+                'cost': {
+                    'total_spend': float(supplier['TotalSpend']),
+                    'avg_unit_cost': float(supplier['AvgUnitCost']),
+                    'freight_percentage': float(supplier['FreightPercentage'])
+                },
+                'consistency': {
+                    'score': float(supplier['ConsistencyScore'])
+                }
+            }
+        }
 
 
-def main(purchases_df, inventory_df=None):
-    """Run supplier analysis"""
-    
-    analyzer = SupplierAnalyzer(purchases_df, inventory_df)
-    
-    # Lead time analysis
-    overall_stats, supplier_stats = analyzer.analyze_lead_times()
-    
-    # Supplier performance
-    supplier_metrics = analyzer.analyze_supplier_performance()
-    
-    # Identify opportunities
-    analyzer.identify_supplier_opportunities()
-    
-    return analyzer
-
-
-if __name__ == "__main__":
-    print("Supplier Analysis module loaded")
-    print("Run from main.py to execute supplier analysis")
+if __name__ == '__main__':
+    print("Supplier Analysis Module")
+    print("Analyzes supplier performance and reliability")
+    print("Import and use with: from supplier_analysis import SupplierAnalyzer")

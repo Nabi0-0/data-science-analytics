@@ -1,291 +1,200 @@
 """
-data_loader.py
-Load and clean all Slooze inventory datasets
+Data Loader Module
+Safely loads and validates all CSV files
 """
 
 import pandas as pd
-import numpy as np
+import os
 from datetime import datetime
-import warnings
-warnings.filterwarnings('ignore')
-
-from utils import (
-    print_section_header, 
-    clean_currency_column,
-    clean_numeric_column,
-    standardize_column_names,
-    validate_data_quality,
-    log_analysis_step
-)
 
 
-class SloozeDataLoader:
-    """
-    Load and process all Slooze inventory data files
-    """
-
+class DataLoader:
+    """Handles loading and validation of all CSV data files"""
+    
     def __init__(self, data_dir='Data'):
         self.data_dir = data_dir
-        self.sales_df = None
-        self.inventory_beg_df = None
-        self.inventory_end_df = None
-        self.purchases_df = None
-        self.invoice_purchases_df = None
-        self.purchase_prices_df = None
-
-    # --------------------------------------------------------
-    #  LOAD ALL DATASETS
-    # --------------------------------------------------------
-    def load_all_data(self):
-        print_section_header("📂 LOADING DATA FILES")
-
+        self.required_files = {
+            'sales': 'SalesFINAL12312016.csv',
+            'purchases': 'PurchasesFINAL12312016.csv',
+            'inventory_begin': 'BegInvFINAL12312016.csv',
+            'inventory_end': 'EndInvFINAL12312016.csv',
+            'invoice_purchases': 'InvoicePurchases12312016.csv',
+            'purchase_prices': '2017PurchasePricesDec.csv'
+        }
+    
+    def load_csv_safe(self, filename):
+        """Safely load CSV with error handling"""
+        filepath = os.path.join(self.data_dir, filename)
+        
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"File not found: {filepath}")
+        
         try:
-            log_analysis_step("Loading Sales Data")
-            self.sales_df = self._load_sales()
-
-            log_analysis_step("Loading Beginning Inventory")
-            self.inventory_beg_df = self._load_beginning_inventory()
-
-            log_analysis_step("Loading Ending Inventory")
-            self.inventory_end_df = self._load_ending_inventory()
-
-            log_analysis_step("Loading Purchases")
-            self.purchases_df = self._load_purchases()
-
-            log_analysis_step("Loading Invoice Purchases")
-            self.invoice_purchases_df = self._load_invoice_purchases()
-
-            log_analysis_step("Loading Purchase Prices")
-            self.purchase_prices_df = self._load_purchase_prices()
-
-            print("\n✅ All data files loaded successfully!")
-            return True
-
-        except FileNotFoundError as e:
-            print(f"\n❌ Error loading data: {e}")
-            print("Please ensure all CSV files are in the 'Data/' directory")
-            return False
-
-    # --------------------------------------------------------
-    #  INDIVIDUAL LOADERS
-    # --------------------------------------------------------
-    def _load_sales(self):
-        df = pd.read_csv(f'{self.data_dir}/SalesFINAL12312016.csv')
-        df = standardize_column_names(df)
-
-        # Rename known columns to standard ones
-        rename_map = {
-            'salesquantity': 'quantity',
-            'salesdollars': 'total_revenue',
-            'salesprice': 'price',
-            'salesdate': 'date'
-        }
-        df.rename(columns=rename_map, inplace=True)
-
-        # Parse date column
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'], errors='coerce')
-
-        # Clean currency columns
-        for col in ['price', 'total_revenue']:
+            # Try different encodings
+            for encoding in ['utf-8', 'latin1', 'iso-8859-1', 'cp1252']:
+                try:
+                    df = pd.read_csv(filepath, encoding=encoding, low_memory=False)
+                    print(f"✓ Loaded {filename} ({len(df)} rows, encoding: {encoding})")
+                    return df
+                except UnicodeDecodeError:
+                    continue
+            
+            # If all encodings fail, try with error handling
+            df = pd.read_csv(filepath, encoding='utf-8', errors='ignore', low_memory=False)
+            print(f"⚠ Loaded {filename} with errors ignored ({len(df)} rows)")
+            return df
+            
+        except Exception as e:
+            print(f"✗ Error loading {filename}: {e}")
+            raise
+    
+    def clean_column_names(self, df):
+        """Clean and standardize column names"""
+        df.columns = df.columns.str.strip()
+        return df
+    
+    def parse_dates(self, df, date_columns):
+        """Parse date columns safely"""
+        for col in date_columns:
             if col in df.columns:
-                df[col] = clean_currency_column(df[col])
-
-        validate_data_quality(df, "Sales Data")
+                try:
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+                except Exception as e:
+                    print(f"Warning: Could not parse dates in {col}: {e}")
         return df
-
-    def _load_beginning_inventory(self):
-        df = pd.read_csv(f'{self.data_dir}/BegInvFINAL12312016.csv')
-        df = standardize_column_names(df)
-        # No critical renames here, only cleaning
-        self._clean_numeric_text_mix(df, "Beginning Inventory")
-        validate_data_quality(df, "Beginning Inventory")
-        return df
-
-    def _load_ending_inventory(self):
-        df = pd.read_csv(f'{self.data_dir}/EndInvFINAL12312016.csv')
-        df = standardize_column_names(df)
-
-        # Rename to consistent field names
-        rename_map = {
-            'onhand': 'stock_qty',
-            'price': 'unit_price',
-            'enddate': 'date'
-        }
-        df.rename(columns=rename_map, inplace=True)
-
-        if 'date' in df.columns:
-            df['date'] = pd.to_datetime(df['date'], errors='coerce')
-
-        self._clean_numeric_text_mix(df, "Ending Inventory")
-        validate_data_quality(df, "Ending Inventory")
-        return df
-
-    def _load_purchases(self):
-        df = pd.read_csv(f'{self.data_dir}/PurchasesFINAL12312016.csv')
-        df = standardize_column_names(df)
-
-        # Rename columns
-        rename_map = {
-            'podate': 'order_date',
-            'receivingdate': 'delivery_date',
-            'purchaseprice': 'unit_cost',
-            'quantity': 'quantity',
-            'dollars': 'total_cost'
-        }
-        df.rename(columns=rename_map, inplace=True)
-
-        # Parse dates
-        for col in ['order_date', 'delivery_date', 'invoicedate', 'paydate']:
+    
+    def load_sales_data(self):
+        """Load and clean sales data"""
+        df = self.load_csv_safe(self.required_files['sales'])
+        df = self.clean_column_names(df)
+        df = self.parse_dates(df, ['SalesDate'])
+        
+        # Clean numeric columns
+        numeric_cols = ['SalesQuantity', 'SalesDollars', 'SalesPrice', 'Volume', 'ExciseTax']
+        for col in numeric_cols:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
-
-        # Clean numeric / currency fields
-        for col in ['unit_cost', 'total_cost']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        return df
+    
+    def load_purchases_data(self):
+        """Load and clean purchases data"""
+        df = self.load_csv_safe(self.required_files['purchases'])
+        df = self.clean_column_names(df)
+        
+        # Parse dates if present
+        date_cols = [col for col in df.columns if 'Date' in col or 'date' in col]
+        df = self.parse_dates(df, date_cols)
+        
+        return df
+    
+    def load_inventory_data(self, inv_type='begin'):
+        """Load inventory data (begin or end)"""
+        file_key = f'inventory_{inv_type}'
+        df = self.load_csv_safe(self.required_files[file_key])
+        df = self.clean_column_names(df)
+        df = self.parse_dates(df, ['startDate', 'endDate'])
+        
+        # Clean numeric columns
+        if 'onHand' in df.columns:
+            df['onHand'] = pd.to_numeric(df['onHand'], errors='coerce')
+        if 'Price' in df.columns:
+            df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
+        
+        return df
+    
+    def load_invoice_purchases(self):
+        """Load invoice purchases data"""
+        df = self.load_csv_safe(self.required_files['invoice_purchases'])
+        df = self.clean_column_names(df)
+        df = self.parse_dates(df, ['InvoiceDate', 'PODate', 'PayDate'])
+        
+        # Clean numeric columns
+        numeric_cols = ['Quantity', 'Dollars', 'Freight']
+        for col in numeric_cols:
             if col in df.columns:
-                df[col] = clean_currency_column(df[col])
-
-        validate_data_quality(df, "Purchases Data")
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
         return df
-
-    def _load_invoice_purchases(self):
-        df = pd.read_csv(f'{self.data_dir}/InvoicePurchases12312016.csv')
-        df = standardize_column_names(df)
-        self._clean_numeric_text_mix(df, "Invoice Purchases")
-        validate_data_quality(df, "Invoice Purchases")
+    
+    def load_purchase_prices(self):
+        """Load purchase prices data"""
+        df = self.load_csv_safe(self.required_files['purchase_prices'])
+        df = self.clean_column_names(df)
+        
+        # Clean numeric columns
+        if 'Price' in df.columns:
+            df['Price'] = pd.to_numeric(df['Price'], errors='coerce')
+        if 'PurchasePrice' in df.columns:
+            df['PurchasePrice'] = pd.to_numeric(df['PurchasePrice'], errors='coerce')
+        if 'Volume' in df.columns:
+            df['Volume'] = pd.to_numeric(df['Volume'], errors='coerce')
+        
         return df
-
-    def _load_purchase_prices(self):
-        df = pd.read_csv(f'{self.data_dir}/2017PurchasePricesDec.csv')
-        df = standardize_column_names(df)
-        for col in df.columns:
-            if 'price' in col or 'cost' in col:
-                df[col] = clean_currency_column(df[col])
-        validate_data_quality(df, "Purchase Prices")
-        return df
-
-    # --------------------------------------------------------
-    #  DATA UNIFICATION
-    # --------------------------------------------------------
-    def create_unified_sales_dataset(self):
-        print_section_header("🔧 CREATING UNIFIED SALES DATASET")
-        sales = self.sales_df.copy()
-
-        # Ensure revenue exists
-        if 'total_revenue' not in sales.columns and {'quantity', 'price'} <= set(sales.columns):
-            sales['total_revenue'] = sales['quantity'] * sales['price']
-
-        # Add date-based breakdowns
-        if 'date' in sales.columns:
-            sales['year'] = sales['date'].dt.year
-            sales['month'] = sales['date'].dt.month
-            sales['quarter'] = sales['date'].dt.quarter
-            sales['day_of_week'] = sales['date'].dt.dayofweek
-            sales['week_of_year'] = sales['date'].dt.isocalendar().week
-
-        print(f"✅ Unified sales dataset created: {len(sales):,} records")
-        return sales
-
-    def create_unified_inventory_dataset(self):
-        print_section_header("🔧 CREATING UNIFIED INVENTORY DATASET")
-        inventory = self.inventory_end_df.copy()
-
-        if 'product_id' not in inventory.columns:
-            inventory['product_id'] = 'P' + (inventory.index + 1).astype(str).str.zfill(5)
-
-        print(f"✅ Unified inventory dataset created: {len(inventory):,} records")
-        return inventory
-
-    def create_unified_purchase_dataset(self):
-        print_section_header("🔧 CREATING UNIFIED PURCHASE DATASET")
-        purchases = self.purchases_df.copy()
-
-        # Calculate lead time
-        if {'order_date', 'delivery_date'} <= set(purchases.columns):
-            purchases["lead_time_days"] = (
-                purchases["delivery_date"] - purchases["order_date"]
-            ).dt.days
-            print("   ✅ Lead time calculated")
-
-        print(f"✅ Unified purchase dataset created: {len(purchases):,} records")
-        return purchases
-
-    # --------------------------------------------------------
-    #  UTILITIES
-    # --------------------------------------------------------
-    def _clean_numeric_text_mix(self, df, label):
-        """Clean columns that may mix numbers and text"""
-        for col in df.columns:
-            if df[col].dtype == 'object' and col not in ['brand', 'description', 'vendor', 'classification']:
-                ratio = df[col].astype(str).str.replace(r'[^0-9.\-]', '', regex=True).str.len().gt(0).mean()
-                if ratio > 0.5:
-                    try:
-                        df[col] = clean_currency_column(df[col])
-                    except Exception:
-                        print(f"⚠️  Skipped non-numeric column during cleaning: {col}")
-                else:
-                    print(f"⚠️  Detected text column, skipping: {col}")
-
-    def get_data_summary(self):
-        print_section_header("📊 DATA SUMMARY")
-        datasets = {
-            'Sales': self.sales_df,
-            'Beginning Inventory': self.inventory_beg_df,
-            'Ending Inventory': self.inventory_end_df,
-            'Purchases': self.purchases_df,
-            'Invoice Purchases': self.invoice_purchases_df,
-            'Purchase Prices': self.purchase_prices_df
-        }
-
-        summary = []
-        for name, df in datasets.items():
-            if df is not None:
-                summary.append({
-                    'Dataset': name,
-                    'Records': len(df),
-                    'Columns': len(df.columns),
-                    'Memory (MB)': df.memory_usage(deep=True).sum() / 1024 / 1024
-                })
-        print(pd.DataFrame(summary).to_string(index=False))
-
-    def export_cleaned_data(self, output_dir='output/csv'):
-        import os
-        os.makedirs(output_dir, exist_ok=True)
-        print_section_header("💾 EXPORTING CLEANED DATA")
-
-        exports = {
-            'sales_cleaned.csv': self.sales_df,
-            'inventory_beginning_cleaned.csv': self.inventory_beg_df,
-            'inventory_ending_cleaned.csv': self.inventory_end_df,
-            'purchases_cleaned.csv': self.purchases_df,
-            'invoice_purchases_cleaned.csv': self.invoice_purchases_df,
-            'purchase_prices_cleaned.csv': self.purchase_prices_df
-        }
-
-        for filename, df in exports.items():
-            if df is not None:
-                path = os.path.join(output_dir, filename)
-                df.to_csv(path, index=False)
-                print(f"✅ Exported: {path}")
+    
+    def validate_data(self, data_dict):
+        """Validate loaded data"""
+        validation_report = {}
+        
+        for name, df in data_dict.items():
+            validation_report[name] = {
+                'rows': len(df),
+                'columns': len(df.columns),
+                'missing_percentage': (df.isnull().sum().sum() / (len(df) * len(df.columns)) * 100),
+                'duplicate_rows': df.duplicated().sum()
+            }
+        
+        return validation_report
+    
+    def load_all_data(self):
+        """Load all data files"""
+        print("\n" + "="*60)
+        print("Loading Slooze Inventory Data")
+        print("="*60)
+        
+        data = {}
+        
+        try:
+            data['sales'] = self.load_sales_data()
+            data['purchases'] = self.load_purchases_data()
+            data['inventory_begin'] = self.load_inventory_data('begin')
+            data['inventory_end'] = self.load_inventory_data('end')
+            data['invoice_purchases'] = self.load_invoice_purchases()
+            data['purchase_prices'] = self.load_purchase_prices()
+            
+            print("\n" + "="*60)
+            print("Data Loading Summary")
+            print("="*60)
+            
+            validation = self.validate_data(data)
+            for name, stats in validation.items():
+                print(f"\n{name.upper()}:")
+                print(f"  Rows: {stats['rows']:,}")
+                print(f"  Columns: {stats['columns']}")
+                print(f"  Missing: {stats['missing_percentage']:.2f}%")
+                print(f"  Duplicates: {stats['duplicate_rows']}")
+            
+            print("\n" + "="*60)
+            print("✓ All data loaded successfully!")
+            print("="*60 + "\n")
+            
+            return data
+            
+        except Exception as e:
+            print(f"\n✗ Error loading data: {e}")
+            raise
 
 
-# --------------------------------------------------------
-# MAIN TEST RUNNER
-# --------------------------------------------------------
-def main():
-    loader = SloozeDataLoader()
-    if loader.load_all_data():
-        loader.get_data_summary()
-        loader.create_unified_sales_dataset()
-        loader.create_unified_inventory_dataset()
-        loader.create_unified_purchase_dataset()
-        loader.export_cleaned_data()
-        print("\n✅ Data loading complete!")
-        return loader
-    else:
-        print("\n❌ Data loading failed!")
-        return None
-
-
-if __name__ == "__main__":
-    loader = main()
+if __name__ == '__main__':
+    # Test data loading
+    loader = DataLoader()
+    data = loader.load_all_data()
+    
+    # Display sample from each dataset
+    print("\n" + "="*60)
+    print("Sample Data Preview")
+    print("="*60)
+    
+    for name, df in data.items():
+        print(f"\n{name.upper()} (first 3 rows):")
+        print(df.head(3).to_string())
